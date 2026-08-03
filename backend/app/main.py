@@ -39,8 +39,11 @@ YDL_OPTS: dict[str, Any] = {
     "skip_download": True,
     "noplaylist": True,
     "no_warnings": True,
-    "username": "oauth2",
-    "password": "",
+    "extractor_args": {
+        "youtube": {
+            "po_token": ["web+http://po_token_provider:8080/token"]
+        }
+    },
 }
 
 app = FastAPI(

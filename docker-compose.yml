@@ -37,3 +37,7 @@ services:
     depends_on:
       - frontend
       - backend
+  po_token_provider:
+    image: brainfucksec/bgutil-ytdlp-pot-provider:latest
+    container_name: yt_pot_provider
+    restart: unless-stopped
