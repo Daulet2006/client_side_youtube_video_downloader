@@ -2,32 +2,38 @@ services:
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
     container_name: yt_backend
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000" # Пробрасываем только локально, чтобы снаружи всё шло строго через Nginx
 
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     container_name: yt_frontend
+    restart: unless-stopped
     environment:
       - HOST=0.0.0.0
       - PORT=3000
-      - NUXT_PUBLIC_API_BASE=http://localhost:8000
+      # Важно: указываем реальный относительный путь /api или домен с https://
+      - NUXT_PUBLIC_API_BASE=/api
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000" # Также закрываем от прямого доступа снаружи
 
   nginx:
-    image: nginx:latest
+    image: nginx:alpine # Берем alpine-версию: весит 25MB вместо 190MB
     container_name: yt_nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/letsencrypt
+      - ./certs:/etc/letsencrypt:ro
     depends_on:
       - frontend
       - backend
