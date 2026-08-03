@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   backend:
     build:
@@ -18,3 +20,16 @@ services:
       - backend
     ports:
       - "3000:3000"
+
+  nginx:
+    image: nginx:latest
+    container_name: yt_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/letsencrypt
+    depends_on:
+      - frontend
+      - backend
