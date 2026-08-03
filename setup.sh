@@ -1,0 +1,172 @@
+#!/bin/bash
+
+# ==========================================
+# КОНФИГУРАЦИЯ
+# ==========================================
+DOMAIN="tude-load.duckdns.org"
+
+echo "🚀 Начинаем полную автонастройку для $DOMAIN (без Email)..."
+
+# ==========================================
+# 1. ГЕНЕРАЦИЯ nginx.conf
+# ==========================================
+echo "📝 Создаем nginx.conf..."
+cat <<EOF > nginx.conf
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    # HTTP: Сервер для Let's Encrypt проверки + Редирект на HTTPS
+    server {
+        listen 80;
+        server_name $DOMAIN;
+
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        location / {
+            return 301 https://\$host\$request_uri;
+        }
+    }
+
+    # HTTPS: Основной сервер
+    server {
+        listen 443 ssl;
+        server_name $DOMAIN;
+
+        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        # Фронтенд (Nuxt)
+        location / {
+            proxy_pass http://frontend:3000;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+        # Бэкенд API
+        location /api/ {
+            proxy_pass http://backend:8000/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+    }
+}
+EOF
+
+# ==========================================
+# 2. ГЕНЕРАЦИЯ docker-compose.yml
+# ==========================================
+echo "📝 Создаем docker-compose.yml..."
+cat <<EOF > docker-compose.yml
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: yt_backend
+    restart: always
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: yt_frontend
+    restart: always
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - NUXT_PUBLIC_API_BASE=https://$DOMAIN/api
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+  nginx:
+    image: nginx:latest
+    container_name: yt_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - certs_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - frontend
+      - backend
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: yt_certbot
+    volumes:
+      - certs_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+
+volumes:
+  certs_data:
+  certbot_www:
+EOF
+
+# ==========================================
+# 3. ВЫПУСК ВРЕМЕННОГО СЕРТИФИКАТА ДЛЯ СТАРТА NGINX
+# ==========================================
+echo "🔑 Выпускаем временный сертификат, чтобы Nginx смог стартовать..."
+docker compose down -v
+
+path="/etc/letsencrypt/live/$DOMAIN"
+docker compose run --rm --entrypoint "\
+  sh -c 'mkdir -p $path && \
+  openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+    -keyout \"$path/privkey.pem\" \
+    -out \"$path/fullchain.pem\" \
+    -subj \"/CN=localhost\"'" certbot
+
+# ==========================================
+# 4. ЗАПУСК NGINX И ПОЛУЧЕНИЕ НАСТОЯЩЕГО SSL
+# ==========================================
+echo "🌐 Запускаем Nginx..."
+docker compose up -d nginx backend frontend
+
+echo "🧹 Удаляем временный сертификат..."
+docker compose run --rm --entrypoint "\
+  rm -Rf /etc/letsencrypt/live/$DOMAIN && \
+  rm -Rf /etc/letsencrypt/archive/$DOMAIN && \
+  rm -Rf /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
+
+echo "🔒 Запрашиваем реальный SSL-сертификат БЕЗ Email..."
+docker compose run --rm --entrypoint "\
+  certbot certonly --webroot -w /var/www/certbot \
+    --register-unsoundly-without-email \
+    -d $DOMAIN \
+    --rsa-key-size 4096 \
+    --agree-tos \
+    --force-renewal \
+    --non-interactive" certbot
+
+# ==========================================
+# 5. ПЕРЕЗАПУСК NGINX ДЛЯ ПРИМЕНЕНИЯ SSL
+# ==========================================
+echo "🔄 Обновляем Nginx для применения новых SSL-ключей..."
+docker compose exec nginx nginx -s reload
+
+echo "--------------------------------------------------------"
+echo "🎉 ВСЁ ГОТОВО!"
+echo "Твой сайт доступен по адресу: https://$DOMAIN"
+echo "API бэкенда доступно по адресу: https://$DOMAIN/api/"
+echo "--------------------------------------------------------"
