@@ -1,4 +1,3 @@
-cat << 'EOF' > setup.sh
 #!/bin/bash
 
 # ==========================================
@@ -6,7 +5,7 @@ cat << 'EOF' > setup.sh
 # ==========================================
 DOMAIN="tude-load.duckdns.org"
 
-echo "🚀 Начинаем полную автонастройку для $DOMAIN (без Email)..."
+echo "🚀 Начинаем полную автонастройку для $DOMAIN..."
 
 # ==========================================
 # 1. ГЕНЕРАЦИЯ nginx.conf
@@ -55,7 +54,7 @@ http {
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
 
-        # Бэкенд API
+        # Бэкенд API (обрати внимание на слэш в proxy_pass)
         location /api/ {
             proxy_pass http://backend:8000/;
             proxy_set_header Host \$host;
@@ -76,29 +75,31 @@ services:
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
     container_name: yt_backend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     container_name: yt_frontend
-    restart: always
+    restart: unless-stopped
     environment:
       - HOST=0.0.0.0
       - PORT=3000
-      - NUXT_PUBLIC_API_BASE=https://$DOMAIN/api
+      - NUXT_PUBLIC_API_BASE=/api
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   nginx:
-    image: nginx:latest
+    image: nginx:alpine
     container_name: yt_nginx
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -125,7 +126,7 @@ DC
 # ==========================================
 # 3. ВЫПУСК ВРЕМЕННОГО СЕРТИФИКАТА ДЛЯ СТАРТА NGINX
 # ==========================================
-echo "🔑 Выпускаем временный сертификат, чтобы Nginx смог стартовать..."
+echo "🔑 Выпускаем временный сертификат..."
 docker compose down -v
 
 path="/etc/letsencrypt/live/$DOMAIN"
@@ -142,13 +143,16 @@ docker compose run --rm --entrypoint \
 echo "🌐 Запускаем контейнеры..."
 docker compose up -d nginx backend frontend
 
+echo "⏳ Ждем 5 секунд инициализации Nginx..."
+sleep 5
+
 echo "🧹 Удаляем временный сертификат..."
 docker compose run --rm --entrypoint \
   "rm -Rf /etc/letsencrypt/live/$DOMAIN && \
   rm -Rf /etc/letsencrypt/archive/$DOMAIN && \
   rm -Rf /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
 
-echo "🔒 Запрашиваем реальный SSL-сертификат БЕЗ Email..."
+echo "🔒 Запрашиваем реальный SSL-сертификат..."
 docker compose run --rm --entrypoint \
   "certbot certonly --webroot -w /var/www/certbot \
     --register-unsafely-without-email \
@@ -161,7 +165,7 @@ docker compose run --rm --entrypoint \
 # ==========================================
 # 5. ПЕРЕЗАПУСК NGINX ДЛЯ ПРИМЕНЕНИЯ SSL
 # ==========================================
-echo "🔄 Обновляем Nginx для применения новых SSL-ключей..."
+echo "🔄 Перезапускаем Nginx..."
 docker compose restart nginx
 
 echo "--------------------------------------------------------"
@@ -169,6 +173,3 @@ echo "🎉 ВСЁ ГОТОВО!"
 echo "Твой сайт доступен по адресу: https://$DOMAIN"
 echo "API бэкенда доступно по адресу: https://$DOMAIN/api/"
 echo "--------------------------------------------------------"
-EOF
-
-chmod +x setup.sh
