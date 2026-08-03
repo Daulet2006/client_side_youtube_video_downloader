@@ -39,8 +39,12 @@ YDL_OPTS: dict[str, Any] = {
     "skip_download": True,
     "noplaylist": True,
     "no_warnings": True,
-    "source_address": "0.0.0.0",  # Биндит IPv6/IPv4 интерфейс
-    "force_ipv6": True,            # Заставляет yt-dlp идти через IPv6
+    "socket_timeout": 10,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["mweb", "ios", "android"]
+        }
+    },
 }
 
 app = FastAPI(
