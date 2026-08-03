@@ -42,7 +42,7 @@ YDL_OPTS: dict[str, Any] = {
     "extractor_args": {
         "youtube": {
             "player_client": ["web"],
-            "po_token": ["web+http://po_token_provider:8080/"]
+            "po_token": ["web+http://po_token_provider:8080/getpot"]
         }
     },
 }
