@@ -39,6 +39,11 @@ YDL_OPTS: dict[str, Any] = {
     "skip_download": True,
     "noplaylist": True,
     "no_warnings": True,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["ios", "android", "mweb"]
+        }
+    },
 }
 
 app = FastAPI(
