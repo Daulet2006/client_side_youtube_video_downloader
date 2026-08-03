@@ -1,3 +1,4 @@
+cat << 'EOF' > setup.sh
 #!/bin/bash
 
 # ==========================================
@@ -11,7 +12,7 @@ echo "🚀 Начинаем полную автонастройку для $DOMA
 # 1. ГЕНЕРАЦИЯ nginx.conf
 # ==========================================
 echo "📝 Создаем nginx.conf..."
-cat <<EOF > nginx.conf
+cat <<NGINX_CONF > nginx.conf
 events {
     worker_connections 1024;
 }
@@ -64,15 +65,13 @@ http {
         }
     }
 }
-EOF
+NGINX_CONF
 
 # ==========================================
 # 2. ГЕНЕРАЦИЯ docker-compose.yml
 # ==========================================
 echo "📝 Создаем docker-compose.yml..."
-cat <<EOF > docker-compose.yml
-version: "3.8"
-
+cat <<DC > docker-compose.yml
 services:
   backend:
     build:
@@ -121,7 +120,7 @@ services:
 volumes:
   certs_data:
   certbot_www:
-EOF
+DC
 
 # ==========================================
 # 3. ВЫПУСК ВРЕМЕННОГО СЕРТИФИКАТА ДЛЯ СТАРТА NGINX
@@ -130,8 +129,8 @@ echo "🔑 Выпускаем временный сертификат, чтоб�
 docker compose down -v
 
 path="/etc/letsencrypt/live/$DOMAIN"
-docker compose run --rm --entrypoint "\
-  sh -c 'mkdir -p $path && \
+docker compose run --rm --entrypoint \
+  "sh -c 'mkdir -p $path && \
   openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
     -keyout \"$path/privkey.pem\" \
     -out \"$path/fullchain.pem\" \
@@ -140,19 +139,19 @@ docker compose run --rm --entrypoint "\
 # ==========================================
 # 4. ЗАПУСК NGINX И ПОЛУЧЕНИЕ НАСТОЯЩЕГО SSL
 # ==========================================
-echo "🌐 Запускаем Nginx..."
+echo "🌐 Запускаем контейнеры..."
 docker compose up -d nginx backend frontend
 
 echo "🧹 Удаляем временный сертификат..."
-docker compose run --rm --entrypoint "\
-  rm -Rf /etc/letsencrypt/live/$DOMAIN && \
+docker compose run --rm --entrypoint \
+  "rm -Rf /etc/letsencrypt/live/$DOMAIN && \
   rm -Rf /etc/letsencrypt/archive/$DOMAIN && \
   rm -Rf /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
 
 echo "🔒 Запрашиваем реальный SSL-сертификат БЕЗ Email..."
-docker compose run --rm --entrypoint "\
-  certbot certonly --webroot -w /var/www/certbot \
-    --register-unsoundly-without-email \
+docker compose run --rm --entrypoint \
+  "certbot certonly --webroot -w /var/www/certbot \
+    --register-unsafely-without-email \
     -d $DOMAIN \
     --rsa-key-size 4096 \
     --agree-tos \
@@ -163,10 +162,13 @@ docker compose run --rm --entrypoint "\
 # 5. ПЕРЕЗАПУСК NGINX ДЛЯ ПРИМЕНЕНИЯ SSL
 # ==========================================
 echo "🔄 Обновляем Nginx для применения новых SSL-ключей..."
-docker compose exec nginx nginx -s reload
+docker compose restart nginx
 
 echo "--------------------------------------------------------"
 echo "🎉 ВСЁ ГОТОВО!"
 echo "Твой сайт доступен по адресу: https://$DOMAIN"
 echo "API бэкенда доступно по адресу: https://$DOMAIN/api/"
 echo "--------------------------------------------------------"
+EOF
+
+chmod +x setup.sh
