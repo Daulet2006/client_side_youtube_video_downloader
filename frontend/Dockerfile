@@ -1,28 +1,24 @@
-# --- Stage 1: Build ---
+# Stage 1: Build
 FROM node:22-alpine AS builder
-
 WORKDIR /app
 
-# Копируем манифесты пакетов для эффективного кеширования
 COPY package*.json ./
+# Исключаем лишний кэш npm при установке
+RUN npm ci --prefer-offline --no-audit && npm cache clean --force
 
-# Используем clean install для воспроизводимых сборок
-RUN npm ci
-
-# Копируем исходники и собираем проект
 COPY . .
 RUN npm run build
 
-# --- Stage 2: Runner (Финальный легкий образ) ---
+# Stage 2: Production Run
 FROM node:22-alpine AS runner
-
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
 
-# Копируем из builder ТОЛЬКО результат сборки Nuxt
+# Копируем только результаты сборки и package.json
 COPY --from=builder /app/.output ./.output
 
 EXPOSE 3000
-
 CMD ["node", ".output/server/index.mjs"]
