@@ -38,7 +38,7 @@ services:
       - frontend
       - backend
   po_token_provider:
-    image: quay.io/invidious/youtube-po-token-generator:latest
+    image: brainfucksec/yt-dlp-get-pot:latest
     container_name: yt_pot_provider
     restart: unless-stopped
     ports:
