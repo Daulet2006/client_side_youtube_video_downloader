@@ -37,9 +37,3 @@ services:
     depends_on:
       - frontend
       - backend
-  po_token_provider:
-    image: brainfucksec/yt-dlp-get-pot:latest
-    container_name: yt_pot_provider
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8080:8080"
