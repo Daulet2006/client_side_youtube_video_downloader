@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: yt_backend
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: yt_frontend
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - NUXT_PUBLIC_API_BASE=http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
